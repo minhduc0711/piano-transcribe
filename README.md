@@ -1,7 +1,18 @@
 piano-transcribe
 ==============================
 
-A short description of the project.
+Final project for MALIS course at EURECOM.
+
+A few collaboration guidelines
+------------
+* Put the untouched original dataset in `data/raw`.
+* Roughly follow [pep8](https://www.python.org/dev/peps/pep-0008/#a-foolish-consistency-is-the-hobgoblin-of-little-minds), and use flake8 for linting. Should preferably use [type hints](https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html) to write better self-documented code.
+* General workflow:
+    * Experiment using Jupyter notebooks
+    * Integrate new changes to `src/`
+    * Add new packages to `requirements.txt`
+    * Open a pull request with a short description about your new changes
+
 
 Project Organization
 ------------
