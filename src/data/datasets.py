@@ -25,9 +25,12 @@ class MAPSDataset(Dataset):
     ):
         data_dir = Path(data_dir)
         self.audio_paths = []
-        for subset in subsets:
-            subset_dir = data_dir / subset
-            self.audio_paths.extend(list(subset_dir.glob("*.wav")))
+        if subsets is not None:
+            for subset in subsets:
+                subset_dir = data_dir / subset
+                self.audio_paths.extend(list(subset_dir.glob("*.wav")))
+        else:
+            self.audio_paths.extend(list(data_dir.glob("**/*.wav")))
 
         self.max_steps = max_steps
         self.audio_transform = audio_transform
