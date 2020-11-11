@@ -23,7 +23,7 @@ class MAPSDataModule(pl.LightningDataModule):
         super(MAPSDataModule, self).__init__()
         self.batch_size = batch_size
 
-    def prepare_data(self):
+    def prepare_data(self, force=False):
         """
         Resamples audio files to 16 KHz
         """
@@ -31,15 +31,18 @@ class MAPSDataModule(pl.LightningDataModule):
         dest_dir = Path(self.PROCESSED_DATA_DIR)
         new_sample_rate = self.SAMPLE_RATE
 
-        print("resampling audio files to 16 KHz...")
         if dest_dir.exists():
-            while True:
-                ans = input(f"{dest_dir} already exists. Continue? y/[n]: ")
-                if ans.lower() == "y":
-                    break
-                elif ans.lower() == "n" or ans == "":
-                    sys.exit(0)
+            if force:
+                while True:
+                    ans = input(f"{dest_dir} already exists. Continue? y/[n]: ")
+                    if ans.lower() == "y":
+                        break
+                    elif ans.lower() == "n" or ans == "":
+                        return
+            else:
+                return
 
+        print("resampling audio files to 16 KHz...")
         for subset_dir in tqdm(list(src_dir.glob("**/MUS/")), desc="subset"):
             subset_name = subset_dir.parent.name
             dest_subset_dir = dest_dir / subset_name
