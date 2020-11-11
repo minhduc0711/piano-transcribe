@@ -49,6 +49,7 @@ class MAPSDataset(Dataset):
             audio = audio.mean(dim=0)
         if self.audio_transform is not None:
             audio = self.audio_transform(audio)
+            audio = audio.transpose(0, 1)
             stride = self.audio_transform.hop_length
         else:
             stride = 1
@@ -61,10 +62,10 @@ class MAPSDataset(Dataset):
         offset_length_in_samples = sample_rate * self.offset_length_in_ms // 1000
         num_steps_onset = onset_length_in_samples // stride
         num_steps_offset = offset_length_in_samples // stride
-        num_steps_total = audio.shape[-1]
+        num_steps_total = audio.shape[0]
 
-        frame_labels = torch.zeros(num_pitches, num_steps_total, dtype=torch.uint8)
-        velocity = torch.zeros(num_pitches, num_steps_total)
+        frame_labels = torch.zeros(num_steps_total, num_pitches, dtype=torch.uint8)
+        velocity = torch.zeros(num_steps_total, num_pitches)
 
         for _, (onset, offset, pitch, vel) in note_df.iterrows():
             onset_start = int(round(onset * sample_rate / stride))
@@ -75,18 +76,18 @@ class MAPSDataset(Dataset):
             offset_end = min(num_steps_total, frame_end + num_steps_offset)
 
             p = int(pitch) - MIDI_MIN_PITCH
-            frame_labels[p, onset_start:onset_end] = 3  # onset
-            frame_labels[p, onset_end:frame_end] = 2  # note frames
-            frame_labels[p, frame_end:offset_end] = 1  # offset
-            velocity[p, onset_start:offset_end] = vel / 128.
+            frame_labels[onset_start:onset_end, p] = 3  # onset
+            frame_labels[onset_end:frame_end, p] = 2  # note frames
+            frame_labels[frame_end:offset_end, p] = 1  # offset
+            velocity[onset_start:offset_end, p] = vel / 128.
 
         if self.max_steps is not None:
             step_start = self.random.randint(num_steps_total - self.max_steps)
             step_end = step_start + self.max_steps
 
-            audio = audio[..., step_start:step_end]
-            frame_labels = frame_labels[..., step_start:step_end]
-            velocity = velocity[..., step_start:step_end]
+            audio = audio[step_start:step_end]
+            frame_labels = frame_labels[step_start:step_end]
+            velocity = velocity[step_start:step_end]
 
         onsets = (frame_labels == 3).float()
         offsets = (frame_labels == 1).float()
