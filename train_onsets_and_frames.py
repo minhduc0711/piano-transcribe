@@ -1,13 +1,21 @@
-import torch
-import pytorch_lightning as pl
+from argparse import ArgumentParser
+
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 from src.data import MAPSDataModule
 from src.models.onsets_and_frames import OnsetsAndFrames
 
+parser = ArgumentParser()
+parser.add_argument("--batch-size", type=int, default=8)
+parser = Trainer.add_argparse_args(parser)
+args = parser.parse_args()
 
-gpus = [0] if torch.cuda.is_available() else None
-dm = MAPSDataModule(batch_size=1, debug=True)
+dm = MAPSDataModule(batch_size=args.batch_size)
 model = OnsetsAndFrames(in_feats=229)
 
-trainer = pl.Trainer(gpus=gpus)
+ckpt_callback = ModelCheckpoint(monitor="valid_loss", save_last=True, save_top_k=5,
+                                filename="onf-MAPS-{epoch:02d}-{valid_loss:.2f}")
+trainer = Trainer.from_argparse_args(args,
+                                     callbacks=[ckpt_callback])
 trainer.fit(model, datamodule=dm)

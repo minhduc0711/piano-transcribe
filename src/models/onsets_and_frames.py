@@ -167,6 +167,7 @@ class OnsetsAndFrames(pl.LightningModule):
         self.log("val_loss/frame", frame_loss)
         self.log("val_loss/velocity", vel_loss)
         self.log("val_loss/total", total_loss)
+        self.log("valid_loss", total_loss)
 
         # compute transcription metrics
         metrics = defaultdict(lambda: defaultdict(list))
@@ -221,7 +222,7 @@ class OnsetsAndFrames(pl.LightningModule):
                  np.mean(metrics["note"]["recall"]))
         self.log("val_metric/note/f1",
                  np.mean(metrics["note"]["f1"]))
-        self.log("val_metric/note/overlap", 
+        self.log("val_metric/note/overlap",
                  np.mean(metrics["note"]["overlap"]))
 
         # self.log("val_metric/note-with-offsets/precision", p)
