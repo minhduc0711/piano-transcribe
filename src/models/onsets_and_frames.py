@@ -288,7 +288,7 @@ class OnsetsAndFrames(pl.LightningModule):
             if offset > onset:
                 pitches.append(pitch)
                 intervals.append([onset, offset])
-                velocities.append(velocity[onset, pitch])
+                velocities.append(velocity[onset, pitch].item())
 
         scale_factor = hop_length / sample_rate
         pitches = np.array([midi_to_hz(p + 21) for p in pitches])
