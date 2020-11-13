@@ -2,13 +2,16 @@ from .datasets import MAPSDataset
 
 from pathlib import Path
 import shutil
-import sys
 
-from tqdm import tqdm
-from torch.utils.data import DataLoader
+import torch
+import torch.nn as nn
 import torchaudio
+from torch.utils.data import DataLoader
 from torchaudio import transforms
 import pytorch_lightning as pl
+
+from tqdm import tqdm
+from src.utils import Lambda
 
 torchaudio.set_audio_backend("sox_io")
 
@@ -19,9 +22,10 @@ class MAPSDataModule(pl.LightningDataModule):
 
     SAMPLE_RATE = 16000
 
-    def __init__(self, batch_size):
+    def __init__(self, batch_size, num_workers=4):
         super(MAPSDataModule, self).__init__()
         self.batch_size = batch_size
+        self.num_workers = num_workers
 
     def prepare_data(self, force=False):
         """
@@ -67,10 +71,13 @@ class MAPSDataModule(pl.LightningDataModule):
 
     def setup(self, stage=None, n_mels=229, hop_length=512, n_fft=2048):
         # using melspectrogram params from "onsets and frames" paper
-        audio_transform = transforms.MelSpectrogram(
-            n_mels=n_mels, hop_length=hop_length, n_fft=n_fft
+        audio_transform = nn.Sequential(
+            transforms.MelSpectrogram(
+                n_mels=n_mels, hop_length=hop_length, n_fft=n_fft
+            ),
+            Lambda(lambda x: torch.log(torch.clamp(x, min=1e-5))),
         )
-        # split audio into segments of length 20 seconds
+        # split audio into segments of length ~20 seconds
         max_steps = int((20.48 * self.SAMPLE_RATE) / hop_length)
 
         if stage == "fit" or stage is None:
@@ -108,10 +115,16 @@ class MAPSDataModule(pl.LightningDataModule):
             self.dims = tuple(self.test_ds[0]["audio"].shape)
 
     def train_dataloader(self):
-        return DataLoader(self.train_ds, batch_size=self.batch_size)
+        return DataLoader(
+            self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val_ds, batch_size=self.batch_size)
+        return DataLoader(
+            self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.test_ds, batch_size=self.batch_size)
+        return DataLoader(
+            self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers
+        )
