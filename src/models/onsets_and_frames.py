@@ -216,29 +216,10 @@ class OnsetsAndFrames(pl.LightningModule):
             metrics["note_with_offsets_and_velocity"]["f1"].append(f1)
             metrics["note_with_offsets_and_velocity"]["overlap"].append(o)
 
-        self.log("val_metric/note/precision",
-                 np.mean(metrics["note"]["precision"]))
-        self.log("val_metric/note/recall",
-                 np.mean(metrics["note"]["recall"]))
-        self.log("val_metric/note/f1",
-                 np.mean(metrics["note"]["f1"]))
-        self.log("val_metric/note/overlap",
-                 np.mean(metrics["note"]["overlap"]))
-
-        # self.log("val_metric/note-with-offsets/precision", p)
-        # self.log("val_metric/note-with-offsets/recall", r)
-        # self.log("val_metric/note-with-offsets/f1", f1)
-        # self.log("val_metric/note-with-offsets/overlap", o)
-
-        # self.log("val_metric/note-with-velocity/precision", p)
-        # self.log("val_metric/note-with-velocity/recall", r)
-        # self.log("val_metric/note-with-velocity/f1", f1)
-        # self.log("val_metric/note-with-velocity/overlap", o)
-
-        # self.log("val_metric/note-with-offsets-and-velocity/precision", p)
-        # self.log("val_metric/note-with-offsets-and-velocity/recall", r)
-        # self.log("val_metric/note-with-offsets-and-velocity/f1", f1)
-        # self.log("val_metric/note-with-offsets-and-velocity/overlap", o)
+        for metric_type in metrics.keys():
+            for cls_metric in metrics[metric_type]:
+                self.log(f"val_metric/{metric_type}/{cls_metric}",
+                         np.mean(metrics[metric_type][cls_metric]))
 
     def extract_notes(
         self,
@@ -291,9 +272,12 @@ class OnsetsAndFrames(pl.LightningModule):
                 intervals.append([onset, offset])
                 velocities.append(velocity[onset, pitch].item())
 
-        scale_factor = hop_length / sample_rate
         pitches = np.array([midi_to_hz(p + 21) for p in pitches])
-        intervals = np.array(intervals) * scale_factor
+        if len(intervals) > 0:
+            scale_factor = hop_length / sample_rate
+            intervals = np.array(intervals) * scale_factor
+        else:
+            intervals = np.empty((0, 2))
         velocities = np.array(velocities)
 
         return pitches, intervals, velocities

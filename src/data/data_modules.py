@@ -22,10 +22,13 @@ class MAPSDataModule(pl.LightningDataModule):
 
     SAMPLE_RATE = 16000
 
-    def __init__(self, batch_size, num_workers=4, debug=False):
+    def __init__(self, batch_size, num_workers=4,
+                 lazy_loading=False,
+                 debug=False):
         super(MAPSDataModule, self).__init__()
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.lazy_loading = lazy_loading
         self.debug = debug
 
     def prepare_data(self, force=False):
@@ -96,12 +99,16 @@ class MAPSDataModule(pl.LightningDataModule):
                 subsets=train_subsets,
                 max_steps=max_steps,
                 audio_transform=audio_transform,
+                lazy_loading=self.lazy_loading,
+                debug=self.debug
             )
             self.val_ds = MAPSDataset(
                 self.PROCESSED_DATA_DIR,
                 subsets=val_subsets,
                 max_steps=max_steps,
                 audio_transform=audio_transform,
+                lazy_loading=self.lazy_loading,
+                debug=self.debug
             )
             self.dims = tuple(self.train_ds[0]["audio"].shape)
 
@@ -112,19 +119,19 @@ class MAPSDataModule(pl.LightningDataModule):
                 subsets=test_subsets,
                 max_steps=max_steps,
                 audio_transform=audio_transform,
+                lazy_loading=self.lazy_loading,
+                debug=self.debug
             )
             self.dims = tuple(self.test_ds[0]["audio"].shape)
 
     def train_dataloader(self):
-        ds = Subset(self.train_ds, [0]) if self.debug else self.train_ds
         return DataLoader(
-            ds, batch_size=self.batch_size, num_workers=self.num_workers
+            self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers
         )
 
     def val_dataloader(self):
-        ds = Subset(self.val_ds, [0]) if self.debug else self.val_ds
         return DataLoader(
-            ds, batch_size=self.batch_size, num_workers=self.num_workers
+            self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers
         )
 
     def test_dataloader(self):

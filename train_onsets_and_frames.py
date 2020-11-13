@@ -11,8 +11,11 @@ parser.add_argument("--batch-size", type=int, default=8)
 parser = Trainer.add_argparse_args(parser)
 args = parser.parse_args()
 
-dm = MAPSDataModule(batch_size=args.batch_size)
-model = OnsetsAndFrames(in_feats=229)
+dm = MAPSDataModule(batch_size=args.batch_size, debug=True)
+dm.setup(stage="fit")
+
+model = OnsetsAndFrames(in_feats=229,
+                        lr_sched_step_size=int(10000 / (len(dm.train_ds) / args.batch_size)))
 
 ckpt_callback = ModelCheckpoint(monitor="valid_loss", save_last=True, save_top_k=5,
                                 filename="onf-MAPS-{epoch:02d}-{valid_loss:.2f}")
