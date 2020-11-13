@@ -50,7 +50,7 @@ class MAPSDataset(Dataset):
         if self.audio_transform is not None:
             audio = self.audio_transform(audio)
             audio = audio.transpose(0, 1)
-            stride = self.audio_transform.hop_length
+            stride = self.audio_transform[0].hop_length
         else:
             stride = 1
 
@@ -58,6 +58,7 @@ class MAPSDataset(Dataset):
         note_df = parse_midi(midi_path)
         num_pitches = MIDI_MAX_PITCH - MIDI_MIN_PITCH + 1
 
+        # quantize note labels
         onset_length_in_samples = sample_rate * self.onset_length_in_ms // 1000
         offset_length_in_samples = sample_rate * self.offset_length_in_ms // 1000
         num_steps_onset = onset_length_in_samples // stride
@@ -100,4 +101,6 @@ class MAPSDataset(Dataset):
             "offsets": offsets,
             "frames": frames,
             "velocity": velocity,
+            "hop_length": stride,
+            "sample_rate": sample_rate
         }
