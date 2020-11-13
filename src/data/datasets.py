@@ -22,30 +22,36 @@ class MAPSDataset(Dataset):
         audio_transform=None,
         onset_length_in_ms=32,
         offset_length_in_ms=32,
-        seed=42
+        seed=42,
+        lazy_loading=False,
+        debug=False
     ):
         self.max_steps = max_steps
         self.audio_transform = audio_transform
         self.onset_length_in_ms = onset_length_in_ms
         self.offset_length_in_ms = offset_length_in_ms
         self.random = np.random.RandomState(seed)
+        self.lazy_loading = lazy_loading
 
         data_dir = Path(data_dir)
-        audio_paths = []
+        self.audio_paths = []
         if subsets is not None:
             for subset in subsets:
                 subset_dir = data_dir / subset
-                audio_paths.extend(list(subset_dir.glob("*.wav")))
+                self.audio_paths.extend(list(subset_dir.glob("*.wav")))
         else:
-            audio_paths.extend(list(data_dir.glob("**/*.wav")))
+            self.audio_paths.extend(list(data_dir.glob("**/*.wav")))
+        if debug:
+            self.audio_paths = self.audio_paths[:1]
 
-        self.data = []
-        for audio_path in tqdm(audio_paths,
-                               desc="Loading data samples into memory"):
-            self.data.append(self.load(audio_path))
+        if not self.lazy_loading:
+            self.data = []
+            for audio_path in tqdm(self.audio_paths,
+                                   desc="Loading data samples into memory"):
+                self.data.append(self.load(audio_path))
 
     def __len__(self):
-        return len(self.data)
+        return len(self.audio_paths)
 
     def load(self, audio_path):
         """
@@ -100,7 +106,10 @@ class MAPSDataset(Dataset):
         }
 
     def __getitem__(self, idx):
-        data = self.data[idx]
+        if self.lazy_loading:
+            data = self.load(self.audio_paths[idx])
+        else:
+            data = self.data[idx]
         audio = data["audio"]
         frame_labels = data["frame_labels"]
         velocity = data["velocity"]
