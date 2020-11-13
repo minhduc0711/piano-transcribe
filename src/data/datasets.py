@@ -1,10 +1,11 @@
-from .midi import parse_midi
-
 from pathlib import Path
+from tqdm import tqdm
 import numpy as np
 import torch
 import torchaudio
 from torch.utils.data import Dataset
+
+from .midi import parse_midi
 
 torchaudio.set_audio_backend("sox_io")
 
@@ -23,26 +24,33 @@ class MAPSDataset(Dataset):
         offset_length_in_ms=32,
         seed=42
     ):
-        data_dir = Path(data_dir)
-        self.audio_paths = []
-        if subsets is not None:
-            for subset in subsets:
-                subset_dir = data_dir / subset
-                self.audio_paths.extend(list(subset_dir.glob("*.wav")))
-        else:
-            self.audio_paths.extend(list(data_dir.glob("**/*.wav")))
-
         self.max_steps = max_steps
         self.audio_transform = audio_transform
         self.onset_length_in_ms = onset_length_in_ms
         self.offset_length_in_ms = offset_length_in_ms
         self.random = np.random.RandomState(seed)
 
-    def __len__(self):
-        return len(self.audio_paths)
+        data_dir = Path(data_dir)
+        audio_paths = []
+        if subsets is not None:
+            for subset in subsets:
+                subset_dir = data_dir / subset
+                audio_paths.extend(list(subset_dir.glob("*.wav")))
+        else:
+            audio_paths.extend(list(data_dir.glob("**/*.wav")))
 
-    def __getitem__(self, idx):
-        audio_path = self.audio_paths[idx]
+        self.data = []
+        for audio_path in tqdm(audio_paths,
+                               desc="Loading data samples into memory"):
+            self.data.append(self.load(audio_path))
+
+    def __len__(self):
+        return len(self.data)
+
+    def load(self, audio_path):
+        """
+        Load audio & corresponding labels into main memory
+        """
         audio, sample_rate = torchaudio.load(str(audio_path))
         # convert to mono channel if necessary
         if audio.ndim > 1:
@@ -81,6 +89,22 @@ class MAPSDataset(Dataset):
             frame_labels[onset_end:frame_end, p] = 2  # note frames
             frame_labels[frame_end:offset_end, p] = 1  # offset
             velocity[onset_start:offset_end, p] = vel / 128.
+        return {
+            "audio_path": str(audio_path.resolve()),
+            "audio": audio,
+            "frame_labels": frame_labels,
+            "velocity": velocity,
+            "hop_length": stride,
+            "sample_rate": sample_rate,
+            "num_steps_total": num_steps_total
+        }
+
+    def __getitem__(self, idx):
+        data = self.data[idx]
+        audio = data["audio"]
+        frame_labels = data["frame_labels"]
+        velocity = data["velocity"]
+        num_steps_total = data["num_steps_total"]
 
         if self.max_steps is not None:
             step_start = self.random.randint(num_steps_total - self.max_steps)
@@ -95,12 +119,12 @@ class MAPSDataset(Dataset):
         frames = (frame_labels > 1).float()
 
         return {
-            "audio_path": str(audio_path.resolve()),
+            "audio_path": data["audio_path"],
             "audio": audio,
             "onsets": onsets,
             "offsets": offsets,
             "frames": frames,
             "velocity": velocity,
-            "hop_length": stride,
-            "sample_rate": sample_rate
+            "sample_rate": data["sample_rate"],
+            "hop_length": data["hop_length"],
         }
