@@ -6,10 +6,10 @@ matplotlib==3.3.2
 mido==1.2.9
 mir_eval==0.6
 -f https://download.pytorch.org/whl/torch_stable.html
-#torch==1.6.0+cpu
-torch==1.6.0
-torchaudio==0.6.0
-pytorch-lightning==1.0.3
+#torch==1.7.0+cpu
+torch==1.7.0
+torchaudio==0.7.0
+pytorch-lightning==1.0.5
 
 # external requirements
 click
