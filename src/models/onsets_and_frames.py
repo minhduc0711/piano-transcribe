@@ -1,4 +1,4 @@
-from collections import defaultdict
+from mir_eval.util import midi_to_hz
 
 import numpy as np
 import torch
@@ -6,11 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
-from mir_eval.util import midi_to_hz
-from mir_eval.transcription import precision_recall_f1_overlap as eval_notes
-from mir_eval.transcription_velocity import (
-    precision_recall_f1_overlap as eval_notes_with_velocity,
-)
+from .lstm import BiLSTM
+from src.eval import compute_note_metrics
 
 
 def velocity_loss(velocity_pred, velocity_true, onset_true):
@@ -67,15 +64,6 @@ class ConvStack(nn.Module):
         return x
 
 
-class BiLSTM(nn.Module):
-    def __init__(self, in_feats: int, out_feats: int):
-        super(BiLSTM, self).__init__()
-        self.lstm = nn.LSTM(in_feats, out_feats, batch_first=True, bidirectional=True)
-
-    def forward(self, x):
-        return self.lstm(x)[0]
-
-
 class OnsetsAndFrames(pl.LightningModule):
     def __init__(
         self,
@@ -87,6 +75,7 @@ class OnsetsAndFrames(pl.LightningModule):
         lr_sched_decay_rate=0.98,
     ):
         super(OnsetsAndFrames, self).__init__()
+        self.save_hyperparameters()
         self.lr = lr
         self.lr_sched_step_size = lr_sched_step_size
         self.lr_sched_decay_rate = lr_sched_decay_rate
@@ -156,8 +145,10 @@ class OnsetsAndFrames(pl.LightningModule):
             batch["frames"],
             batch["velocity"],
         )
-        onset_pred, frame_pred, velocity_pred = self(audio_feats)
+        sample_rate = batch["sample_rate"][0].item()
+        hop_length = batch["hop_length"][0].item()
 
+        onset_pred, frame_pred, velocity_pred = self(audio_feats)
         onset_loss = F.binary_cross_entropy(onset_pred, onset_true)
         frame_loss = F.binary_cross_entropy(frame_pred, frame_true)
         vel_loss = velocity_loss(velocity_pred, velocity_true, onset_true)
@@ -169,65 +160,44 @@ class OnsetsAndFrames(pl.LightningModule):
         self.log("val_loss/total", total_loss)
         self.log("valid_loss", total_loss)
 
-        # compute transcription metrics
-        metrics = defaultdict(lambda: defaultdict(list))
-        # needs to iterate over single samples
-        for onset_est, frame_est, vel_est, onset_ref, frame_ref, vel_ref, sample_rate, hop_length \
-                in zip(onset_pred, frame_pred,velocity_pred, onset_true, frame_true, velocity_true,
-                       batch["sample_rate"], batch["hop_length"]):
-            p_ref, i_ref, v_ref = self.extract_notes(
-                onset_ref,
-                frame_ref,
-                vel_ref,
-                sample_rate=sample_rate.item(),
-                hop_length=sample_rate.item(),
-            )
+        # COMPUTING TRANSCRIPTION METRICS
+        # needs to iterate over single samples, as metric computation does not support batching
+        sample_metrics = []  # each elem is a metric dict for 1 sample
+        for onset_est, frame_est, vel_est, onset_ref, frame_ref, vel_ref \
+                in zip(onset_pred, frame_pred, velocity_pred, onset_true, frame_true, velocity_true):
             p_est, i_est, v_est = self.extract_notes(
                 onset_est,
                 frame_est,
                 vel_est,
-                sample_rate=sample_rate.item(),
-                hop_length=sample_rate.item(),
+                sample_rate=sample_rate,
+                hop_length=hop_length
             )
-
-            p, r, f1, o = eval_notes(i_ref, p_ref, i_est, p_est, offset_ratio=None)
-            metrics["note"]["precision"].append(p)
-            metrics["note"]["recall"].append(r)
-            metrics["note"]["f1"].append(f1)
-            metrics["note"]["overlap"].append(o)
-
-            p, r, f1, o = eval_notes(i_ref, p_ref, i_est, p_est)
-            metrics["note_with_offsets"]["precision"].append(p)
-            metrics["note_with_offsets"]["recall"].append(r)
-            metrics["note_with_offsets"]["f1"].append(f1)
-            metrics["note_with_offsets"]["overlap"].append(o)
-
-            p, r, f1, o = eval_notes_with_velocity(
-                i_ref, p_ref, v_ref, i_est, p_est, v_est, offset_ratio=None, velocity_tolerance=0.1
+            p_ref, i_ref, v_ref = self.extract_notes(
+                onset_ref,
+                frame_ref,
+                vel_ref,
+                sample_rate=sample_rate,
+                hop_length=hop_length,
             )
-            metrics["note_with_velocity"]["precision"].append(p)
-            metrics["note_with_velocity"]["recall"].append(r)
-            metrics["note_with_velocity"]["f1"].append(f1)
-            metrics["note_with_velocity"]["overlap"].append(o)
-
-            p, r, f1, o = eval_notes_with_velocity(i_ref, p_ref, v_ref, i_est, p_est, v_est, velocity_tolerance=0.1)
-            metrics["note_with_offsets_and_velocity"]["precision"].append(p)
-            metrics["note_with_offsets_and_velocity"]["recall"].append(r)
-            metrics["note_with_offsets_and_velocity"]["f1"].append(f1)
-            metrics["note_with_offsets_and_velocity"]["overlap"].append(o)
-
-        for metric_type in metrics.keys():
-            for cls_metric in metrics[metric_type]:
-                self.log(f"val_metric/{metric_type}/{cls_metric}",
-                         np.mean(metrics[metric_type][cls_metric]))
+            sample_metrics.append(
+                compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref)
+            )
+        # average metrics over samples,
+        # noting that all metric dicts have the same structure
+        for metric_type in sample_metrics[0].keys():
+            for cls_metric in sample_metrics[0][metric_type]:
+                avg_val = np.mean([
+                    metric[metric_type][cls_metric] for metric in sample_metrics
+                ])
+                self.log(f"val_metric/{metric_type}/{cls_metric}", avg_val)
 
     def extract_notes(
         self,
         onsets,
         frames,
         velocity,
-        sample_rate,
-        hop_length,
+        sample_rate: int,
+        hop_length: int,
         onset_threshold: int = 0.5,
         frame_threshold: int = 0.5,
     ):
