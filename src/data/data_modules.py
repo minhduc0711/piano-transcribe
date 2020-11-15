@@ -6,12 +6,12 @@ import shutil
 import torch
 import torch.nn as nn
 import torchaudio
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from torchaudio import transforms
 import pytorch_lightning as pl
 
 from tqdm import tqdm
-from src.utils import Lambda
+from src.layer_utils import Lambda
 
 torchaudio.set_audio_backend("sox_io")
 
@@ -20,12 +20,25 @@ class MAPSDataModule(pl.LightningDataModule):
     RAW_DATA_DIR = "data/raw/MAPS/"
     PROCESSED_DATA_DIR = "data/processed/MAPS_MUS/"
 
-    SAMPLE_RATE = 16000
+    # default audio features in ONSETS AND FRAMES paper
+    audio_transform = nn.Sequential(
+        transforms.MelSpectrogram(n_mels=229, hop_length=512, n_fft=2048),
+        Lambda(lambda x: torch.log(torch.clamp(x, min=1e-5))),
+    )
 
-    def __init__(self, batch_size, num_workers=4,
+    def __init__(self, batch_size,
+                 sample_rate: int,
+                 max_steps: int,
+                 audio_transform=None,
+                 num_workers=4,
                  lazy_loading=False,
                  debug=False):
         super(MAPSDataModule, self).__init__()
+        self.sample_rate = sample_rate
+        self.max_steps = max_steps
+        if audio_transform is not None:
+            self.audio_transform = audio_transform
+
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.lazy_loading = lazy_loading
@@ -37,7 +50,7 @@ class MAPSDataModule(pl.LightningDataModule):
         """
         src_dir = Path(self.RAW_DATA_DIR)
         dest_dir = Path(self.PROCESSED_DATA_DIR)
-        new_sample_rate = self.SAMPLE_RATE
+        new_sample_rate = self.sample_rate
 
         if dest_dir.exists():
             if force:
@@ -73,56 +86,49 @@ class MAPSDataModule(pl.LightningDataModule):
                     sample_rate=new_sample_rate,
                 )
 
-    def setup(self, stage=None, n_mels=229, hop_length=512, n_fft=2048):
-        # using melspectrogram params from "onsets and frames" paper
-        audio_transform = nn.Sequential(
-            transforms.MelSpectrogram(
-                n_mels=n_mels, hop_length=hop_length, n_fft=n_fft
-            ),
-            Lambda(lambda x: torch.log(torch.clamp(x, min=1e-5))),
-        )
-        # split audio into segments of length ~20 seconds
-        max_steps = int((20.48 * self.SAMPLE_RATE) / hop_length)
+    def setup(self, stage=None):
+        train_subsets = [
+            "AkPnBcht",
+            "AkPnBsdf",
+            "AkPnCGdD",
+            "AkPnStgb",
+            "SptkBGAm",
+            "StbgTGd2",
+        ]
+        val_subsets = ["SptkBGCl"]
+        test_subsets = ["ENSTDkAm", "ENSTDkCl"]
 
         if stage == "fit" or stage is None:
-            train_subsets = [
-                "AkPnBcht",
-                "AkPnBsdf",
-                "AkPnCGdD",
-                "AkPnStgb",
-                "SptkBGAm",
-                "StbgTGd2",
-            ]
-            val_subsets = ["SptkBGCl"]
             self.train_ds = MAPSDataset(
                 self.PROCESSED_DATA_DIR,
                 subsets=train_subsets,
-                max_steps=max_steps,
-                audio_transform=audio_transform,
+                max_steps=self.max_steps,
+                sample_rate=self.sample_rate,
+                audio_transform=self.audio_transform,
                 lazy_loading=self.lazy_loading,
                 debug=self.debug
             )
             self.val_ds = MAPSDataset(
                 self.PROCESSED_DATA_DIR,
                 subsets=val_subsets,
-                max_steps=max_steps,
-                audio_transform=audio_transform,
+                max_steps=self.max_steps,
+                sample_rate=self.sample_rate,
+                audio_transform=self.audio_transform,
                 lazy_loading=self.lazy_loading,
                 debug=self.debug
             )
             self.dims = tuple(self.train_ds[0]["audio"].shape)
 
         if stage == "test" or stage is None:
-            test_subsets = ["ENSTDkAm", "ENSTDkCl"]
             self.test_ds = MAPSDataset(
                 self.PROCESSED_DATA_DIR,
                 subsets=test_subsets,
-                max_steps=max_steps,
-                audio_transform=audio_transform,
+                max_steps=self.max_steps,
+                sample_rate=self.sample_rate,
+                audio_transform=self.audio_transform,
                 lazy_loading=self.lazy_loading,
                 debug=self.debug
             )
-            self.dims = tuple(self.test_ds[0]["audio"].shape)
 
     def train_dataloader(self):
         return DataLoader(

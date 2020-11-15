@@ -11,7 +11,13 @@ parser.add_argument("--batch-size", type=int, default=8)
 parser = Trainer.add_argparse_args(parser)
 args = parser.parse_args()
 
-dm = MAPSDataModule(batch_size=args.batch_size, debug=True)
+sample_rate = 16000
+# split audio into segments of ~20 seconds
+max_steps = int((20.48 * sample_rate) / 512)
+dm = MAPSDataModule(batch_size=args.batch_size,
+                    sample_rate=sample_rate,
+                    max_steps=max_steps,
+                    debug=True)
 dm.setup(stage="fit")
 
 model = OnsetsAndFrames(in_feats=229,
