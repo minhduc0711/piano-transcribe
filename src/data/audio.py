@@ -1,5 +1,8 @@
 import torch
+import torch.nn as nn
 import torchaudio
+
+from src.layer_utils import Lambda
 
 
 def load_audio(audio_path,
@@ -16,8 +19,13 @@ def load_audio(audio_path,
         audio = audio.mean(dim=0)
     if audio_transform is not None:
         audio = audio_transform(audio)
-        # bring time to the first dim, assuming the transform above
-        # outputs a tensor of shape (n_feats, time)
-        audio = audio.transpose(0, 1)
 
     return audio
+
+
+# default audio features in ONSETS AND FRAMES paper
+onf_transform = nn.Sequential(
+    torchaudio.transforms.MelSpectrogram(n_mels=229, hop_length=512, n_fft=2048),
+    Lambda(lambda x: torch.log(torch.clamp(x, min=1e-5))),
+    Lambda(lambda x: torch.transpose(x, 0, 1))
+)

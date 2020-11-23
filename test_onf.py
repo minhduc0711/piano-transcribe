@@ -4,6 +4,7 @@ from collections import defaultdict
 from tabulate import tabulate
 from tqdm import tqdm
 import numpy as np
+from src.data.audio import onf_transform
 from src.data.data_modules import MAPSDataModule
 from src.eval import compute_note_metrics
 from src.models.onsets_and_frames import OnsetsAndFrames
@@ -17,6 +18,8 @@ args = parser.parse_args()
 dm = MAPSDataModule(batch_size=1,
                     sample_rate=16000,
                     max_steps=None,
+                    audio_transform=onf_transform,
+                    hop_length=512,
                     lazy_loading=True,
                     debug=True)
 dm.setup(stage="test")

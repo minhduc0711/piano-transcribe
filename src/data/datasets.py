@@ -1,3 +1,4 @@
+from typing import Union, List, Callable
 from pathlib import Path
 from tqdm import tqdm
 import numpy as np
@@ -15,21 +16,53 @@ MIDI_MAX_PITCH = 108
 
 
 class MAPSDataset(Dataset):
+    """
+    PyTorch dataset that implements the MAPS dataset  
+
+        self.max_steps = max_steps
+        self.audio_transform = audio_transform
+        self.sample_rate = sample_rate
+        self.onset_length_in_ms = onset_length_in_ms
+        self.offset_length_in_ms = offset_length_in_ms
+        self.random = np.random.RandomState(seed)
+        self.lazy_loading = lazy_loading
+    Attributes
+    ----------
+    max_steps
+        The length of the audio sequence to be randomly sliced.
+        If None, returns the whole sequence, and thus the dataset can't be batched
+        due to audio sequences having different sizes.
+    audio_transform
+        The feature extractor to be used. If None, returns the raw audio signal.
+    hop_length:
+        If the audio_transform splits the signal into frames, this must be provided.
+    sample_rate
+        Sample rate of the audio signal
+    onset_length_in_ms
+        The length of an onset measured in milliseconds
+    offset_length_in_ms
+        The length of an onset measured in milliseconds
+    lazy_loading
+        If True, only load audio & labels of a track when it is requested.
+        Otherwise, load the whole dataset into memory when __init__() is called.
+    """
     def __init__(
         self,
-        data_dir,
-        max_steps=None,
-        subsets=None,
-        audio_transform=None,
-        sample_rate=16000,
-        onset_length_in_ms=32,
-        offset_length_in_ms=32,
-        seed=42,
-        lazy_loading=False,
-        debug=False
+        data_dir: Union[str, Path],
+        max_steps: int = None,
+        subsets: List[str] = None,
+        audio_transform: Callable[[torch.Tensor], torch.Tensor] = None,
+        hop_length: int = 1,
+        sample_rate: int = 16000,
+        onset_length_in_ms: int = 32,
+        offset_length_in_ms: int = 32,
+        seed: int = 42,
+        lazy_loading: bool = False,
+        debug: bool = False
     ):
         self.max_steps = max_steps
         self.audio_transform = audio_transform
+        self.hop_length = hop_length
         self.sample_rate = sample_rate
         self.onset_length_in_ms = onset_length_in_ms
         self.offset_length_in_ms = offset_length_in_ms
@@ -60,13 +93,10 @@ class MAPSDataset(Dataset):
         """
         Load audio & corresponding labels into main memory
         """
-        audio = load_audio(audio_path, 
+        audio = load_audio(audio_path,
                            audio_transform=self.audio_transform,
                            new_sample_rate=self.sample_rate)
-        if self.audio_transform is not None:
-            stride = self.audio_transform[0].hop_length
-        else:
-            stride = 1
+        stride = self.hop_length
 
         midi_path = audio_path.with_suffix(".mid")
         note_df = parse_midi(midi_path)
