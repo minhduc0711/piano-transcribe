@@ -4,6 +4,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from src.data import MAPSDataModule
+from src.data.audio import onf_transform
 from src.models.onsets_and_frames import OnsetsAndFrames
 
 parser = ArgumentParser()
@@ -17,6 +18,8 @@ max_steps = int((20.48 * sample_rate) / 512)
 dm = MAPSDataModule(batch_size=args.batch_size,
                     sample_rate=sample_rate,
                     max_steps=max_steps,
+                    audio_transform=onf_transform,
+                    hop_length=512,
                     debug=True)
 dm.setup(stage="fit")
 

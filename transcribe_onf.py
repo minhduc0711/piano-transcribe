@@ -4,12 +4,11 @@ from pathlib import Path
 from mido import MidiFile, MidiTrack, Message
 from mir_eval.util import hz_to_midi
 
-from src.data.audio import load_audio
-from src.data.data_modules import MAPSDataModule
+from src.data.audio import load_audio, onf_transform
 from src.models.onsets_and_frames import OnsetsAndFrames
 
 ap = ArgumentParser()
-ap.add_argument("--input-audio", type=str, required=True)
+ap.add_argument("--audio", type=str, required=True)
 ap.add_argument("--checkpoint", type=str, required=True)
 ap.add_argument("--tempo", type=int, default=2)
 args = ap.parse_args()
@@ -17,8 +16,8 @@ args = ap.parse_args()
 # prepare audio input
 print("Processing audio file...")
 audio = load_audio(
-    args.input_audio,
-    audio_transform=MAPSDataModule.audio_transform,
+    args.audio,
+    audio_transform=onf_transform,
     new_sample_rate=16000,
 )
 audio.unsqueeze_(0)
@@ -67,6 +66,6 @@ for event in events:
 
 output_dir = Path("out/")
 output_dir.mkdir(exist_ok=True)
-out_midi_path = output_dir / Path(args.input_audio).with_suffix(".midi").name
+out_midi_path = output_dir / Path(args.audio).with_suffix(".midi").name
 file.save(out_midi_path)
 print("Output MIDI saved to", out_midi_path)
