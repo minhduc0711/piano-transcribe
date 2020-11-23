@@ -5,7 +5,7 @@ Final project for MALIS course at EURECOM.
 
 A few collaboration guidelines
 ------------
-* Put the untouched original dataset in `data/raw`.
+* Put the untouched original dataset in `data/raw`, processed dataset in `data/processed`.
 * Roughly follow [pep8](https://www.python.org/dev/peps/pep-0008/#a-foolish-consistency-is-the-hobgoblin-of-little-minds), and use flake8 for linting. Should preferably use [type hints](https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html) to write better self-documented code.
 * General workflow:
     * Checkout to a new branch
