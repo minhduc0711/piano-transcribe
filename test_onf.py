@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from collections import defaultdict
 
 from tabulate import tabulate
@@ -8,6 +9,10 @@ from src.eval import compute_note_metrics
 from src.models.onsets_and_frames import OnsetsAndFrames
 
 
+parser = ArgumentParser()
+parser.add_argument("--checkpoint", type=str, required=True)
+args = parser.parse_args()
+
 # testing over full audio files
 dm = MAPSDataModule(batch_size=1,
                     sample_rate=16000,
@@ -16,7 +21,7 @@ dm = MAPSDataModule(batch_size=1,
                     debug=True)
 dm.setup(stage="test")
 
-model = OnsetsAndFrames.load_from_checkpoint("models/onf-MAPS-epoch=379-valid_loss=0.08.ckpt",
+model = OnsetsAndFrames.load_from_checkpoint(args.checkpoint,
                                              in_feats=229)
 model.eval()
 
