@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from collections import defaultdict
 
+import torch
 from tabulate import tabulate
 from tqdm import tqdm
 import numpy as np
@@ -41,7 +42,8 @@ for batch in tqdm(dm.test_dataloader(), "Test samples"):
     sample_rate = batch["sample_rate"][0].item()
     hop_length = batch["hop_length"][0].item()
 
-    onset_pred, frame_pred, velocity_pred = model(audio_feats)
+    with torch.no_grad():
+        onset_pred, frame_pred, velocity_pred = model(audio_feats)
 
     p_est, i_est, v_est = model.extract_notes(
         onset_pred.squeeze(),
@@ -50,9 +52,6 @@ for batch in tqdm(dm.test_dataloader(), "Test samples"):
         sample_rate=sample_rate,
         hop_length=hop_length
     )
-    del onset_pred
-    del frame_pred
-    del velocity_pred
 
     p_ref, i_ref, v_ref = model.extract_notes(
         onset_true.squeeze(),
@@ -61,9 +60,6 @@ for batch in tqdm(dm.test_dataloader(), "Test samples"):
         sample_rate=sample_rate,
         hop_length=hop_length,
     )
-    del onset_true
-    del frame_true
-    del velocity_true
 
     sample_metrics.append(
         compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref)
