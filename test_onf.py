@@ -23,7 +23,7 @@ dm = MAPSDataModule(batch_size=1,
                     audio_transform=onf_transform,
                     hop_length=512,
                     lazy_loading=True,
-                    debug=True)
+                    debug=False)
 dm.setup(stage="test")
 
 model = OnsetsAndFrames.load_from_checkpoint(args.checkpoint,
