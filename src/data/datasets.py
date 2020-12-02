@@ -1,5 +1,7 @@
 from typing import Union, List, Callable
 from pathlib import Path
+import warnings
+
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -17,15 +19,8 @@ MIDI_MAX_PITCH = 108
 
 class MAPSDataset(Dataset):
     """
-    PyTorch dataset that implements the MAPS dataset  
+    PyTorch dataset that implements the MAPS dataset
 
-        self.max_steps = max_steps
-        self.audio_transform = audio_transform
-        self.sample_rate = sample_rate
-        self.onset_length_in_ms = onset_length_in_ms
-        self.offset_length_in_ms = offset_length_in_ms
-        self.random = np.random.RandomState(seed)
-        self.lazy_loading = lazy_loading
     Attributes
     ----------
     max_steps
@@ -68,6 +63,13 @@ class MAPSDataset(Dataset):
         self.offset_length_in_ms = offset_length_in_ms
         self.random = np.random.RandomState(seed)
         self.lazy_loading = lazy_loading
+
+        if audio_transform is not None and hop_length == 1:
+            warnings.warn((
+                "hop_length is currenly set to 1. "
+                "If you are using an audio transform (e.g spectrogram), "
+                "make sure to set hop_length correctly in order to have correct frame labels"
+            ))
 
         data_dir = Path(data_dir)
         self.audio_paths = []
