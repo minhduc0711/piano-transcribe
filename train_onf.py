@@ -20,7 +20,7 @@ dm = MAPSDataModule(batch_size=args.batch_size,
                     max_steps=max_steps,
                     audio_transform=onf_transform,
                     hop_length=512,
-                    debug=True)
+                    debug=False)
 dm.setup(stage="fit")
 
 model = OnsetsAndFrames(in_feats=229,

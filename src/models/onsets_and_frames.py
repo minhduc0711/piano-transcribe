@@ -109,7 +109,6 @@ class OnsetsAndFrames(pl.LightningModule):
     def forward(self, x):
         onset_pred = self.onset_stack(x)
         frame_pred_pre = self.frame_stack_1(x)
-        # not using frame predictions to optimize onset stack
         combined_pred = torch.cat([onset_pred, frame_pred_pre], dim=-1)
         frame_pred = self.frame_stack_2(combined_pred)
         velocity_pred = self.velocity_stack(x)
@@ -145,8 +144,8 @@ class OnsetsAndFrames(pl.LightningModule):
             batch["frames"],
             batch["velocity"],
         )
-        sample_rate = batch["sample_rate"][0].item()
-        hop_length = batch["hop_length"][0].item()
+        sample_rate = batch["sample_rate"][0]
+        hop_length = batch["hop_length"][0]
 
         onset_pred, frame_pred, velocity_pred = self(audio_feats)
         onset_loss = F.binary_cross_entropy(onset_pred, onset_true)
@@ -163,8 +162,8 @@ class OnsetsAndFrames(pl.LightningModule):
         # COMPUTING TRANSCRIPTION METRICS
         # needs to iterate over single samples, as metric computation does not support batching
         sample_metrics = []  # each elem is a metric dict for 1 sample
-        for onset_est, frame_est, vel_est, onset_ref, frame_ref, vel_ref \
-                in zip(onset_pred, frame_pred, velocity_pred, onset_true, frame_true, velocity_true):
+        for onset_est, frame_est, vel_est, midi_label \
+                in zip(onset_pred, frame_pred, velocity_pred, batch["midi_labels"]):
             p_est, i_est, v_est = self.extract_notes(
                 onset_est,
                 frame_est,
@@ -172,13 +171,8 @@ class OnsetsAndFrames(pl.LightningModule):
                 sample_rate=sample_rate,
                 hop_length=hop_length
             )
-            p_ref, i_ref, v_ref = self.extract_notes(
-                onset_ref,
-                frame_ref,
-                vel_ref,
-                sample_rate=sample_rate,
-                hop_length=hop_length,
-            )
+            p_ref, i_ref, v_ref = midi_label
+
             sample_metrics.append(
                 compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref)
             )
@@ -191,8 +185,8 @@ class OnsetsAndFrames(pl.LightningModule):
                 ])
                 self.log(f"val_metric/{metric_type}/{cls_metric}", avg_val)
 
+    @staticmethod
     def extract_notes(
-        self,
         onsets,
         frames,
         velocity,
@@ -218,12 +212,10 @@ class OnsetsAndFrames(pl.LightningModule):
         frames = (frames > frame_threshold).cpu().to(torch.int)
         # clip velocity to [0, 1]
         velocity = torch.clamp(velocity, min=0, max=1)
-
         # squashing adjacent onsets
         onsets = torch.cat([onsets[:1, :], onsets[1:, :] - onsets[:-1, :]], dim=0) == 1
-        # array of
+
         pitches = []
-        # array of (n, 2) - onset and offset times
         intervals = []
         velocities = []
 

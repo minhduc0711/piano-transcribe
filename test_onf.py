@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from collections import defaultdict
 
+import torch
 from tabulate import tabulate
 from tqdm import tqdm
 import numpy as np
@@ -13,6 +14,7 @@ from src.models.onsets_and_frames import OnsetsAndFrames
 parser = ArgumentParser()
 parser.add_argument("--checkpoint", type=str, required=True)
 args = parser.parse_args()
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # testing over full audio files
 dm = MAPSDataModule(batch_size=1,
@@ -21,27 +23,28 @@ dm = MAPSDataModule(batch_size=1,
                     audio_transform=onf_transform,
                     hop_length=512,
                     lazy_loading=True,
-                    debug=True)
+                    debug=False)
 dm.setup(stage="test")
 
 model = OnsetsAndFrames.load_from_checkpoint(args.checkpoint,
                                              in_feats=229)
-model.eval()
+model.to(device).eval()
 
 # a bit different from the validation loop, which partially works with batches
 sample_metrics = []  # each elem is a metric dict for 1 sample
 for batch in tqdm(dm.test_dataloader(), "Test samples"):
     # unpack data from batch (of 1 sample actually)
-    audio_feats = batch["audio"]
+    audio_feats = batch["audio"].to(device)
     onset_true, frame_true, velocity_true = (
-        batch["onsets"],
-        batch["frames"],
-        batch["velocity"],
+        batch["onsets"].to(device),
+        batch["frames"].to(device),
+        batch["velocity"].to(device),
     )
-    sample_rate = batch["sample_rate"][0].item()
-    hop_length = batch["hop_length"][0].item()
+    sample_rate = batch["sample_rate"][0]
+    hop_length = batch["hop_length"][0]
 
-    onset_pred, frame_pred, velocity_pred = model(audio_feats)
+    with torch.no_grad():
+        onset_pred, frame_pred, velocity_pred = model(audio_feats)
 
     p_est, i_est, v_est = model.extract_notes(
         onset_pred.squeeze(),
@@ -50,20 +53,7 @@ for batch in tqdm(dm.test_dataloader(), "Test samples"):
         sample_rate=sample_rate,
         hop_length=hop_length
     )
-    del onset_pred
-    del frame_pred
-    del velocity_pred
-
-    p_ref, i_ref, v_ref = model.extract_notes(
-        onset_true.squeeze(),
-        frame_true.squeeze(),
-        velocity_true.squeeze(),
-        sample_rate=sample_rate,
-        hop_length=hop_length,
-    )
-    del onset_true
-    del frame_true
-    del velocity_true
+    p_ref, i_ref, v_ref = batch["midi_labels"][0]
 
     sample_metrics.append(
         compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref)
