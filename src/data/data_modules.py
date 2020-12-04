@@ -19,7 +19,7 @@ class MAPSDataModule(pl.LightningDataModule):
     RAW_DATA_DIR = "data/raw/MAPS/"
     PROCESSED_DATA_DIR = "data/processed/MAPS_MUS/"
 
-    def __init__(self, batch_size,
+    def __init__(self, batch_size: int,
                  sample_rate: int,
                  max_steps: int,
                  audio_transform=None,
@@ -128,15 +128,26 @@ class MAPSDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers
+            self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers,
+            collate_fn=self.collate_fn
         )
 
     def val_dataloader(self):
         return DataLoader(
-            self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers
+            self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers,
+            collate_fn=self.collate_fn
         )
 
     def test_dataloader(self):
         return DataLoader(
-            self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers
+            self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers,
+            collate_fn=self.collate_fn
         )
+
+    def collate_fn(self, item_dicts):
+        batch = {}
+        for k in item_dicts[0].keys():
+            batch[k] = [d[k] for d in item_dicts]
+            if isinstance(batch[k][0], torch.Tensor):
+                batch[k] = torch.stack(batch[k], 0)
+        return batch

@@ -1,10 +1,13 @@
 from typing import Union, List, Callable
 from pathlib import Path
+import warnings
+
 from tqdm import tqdm
 import numpy as np
 import torch
 import torchaudio
 from torch.utils.data import Dataset
+from mir_eval.util import midi_to_hz
 
 from .audio import load_audio
 from .midi import parse_midi
@@ -17,15 +20,8 @@ MIDI_MAX_PITCH = 108
 
 class MAPSDataset(Dataset):
     """
-    PyTorch dataset that implements the MAPS dataset  
+    PyTorch dataset that implements the MAPS dataset
 
-        self.max_steps = max_steps
-        self.audio_transform = audio_transform
-        self.sample_rate = sample_rate
-        self.onset_length_in_ms = onset_length_in_ms
-        self.offset_length_in_ms = offset_length_in_ms
-        self.random = np.random.RandomState(seed)
-        self.lazy_loading = lazy_loading
     Attributes
     ----------
     max_steps
@@ -34,7 +30,7 @@ class MAPSDataset(Dataset):
         due to audio sequences having different sizes.
     audio_transform
         The feature extractor to be used. If None, returns the raw audio signal.
-    hop_length:
+    hop_length
         If the audio_transform splits the signal into frames, this must be provided.
     sample_rate
         Sample rate of the audio signal
@@ -68,6 +64,13 @@ class MAPSDataset(Dataset):
         self.offset_length_in_ms = offset_length_in_ms
         self.random = np.random.RandomState(seed)
         self.lazy_loading = lazy_loading
+
+        if audio_transform is not None and hop_length == 1:
+            warnings.warn((
+                "hop_length is currenly set to 1. "
+                "If you are using an audio transform (e.g spectrogram), "
+                "make sure to set hop_length correctly in order to have correct frame labels"
+            ))
 
         data_dir = Path(data_dir)
         self.audio_paths = []
@@ -130,9 +133,8 @@ class MAPSDataset(Dataset):
             "audio": audio,
             "frame_labels": frame_labels,
             "velocity": velocity,
-            "hop_length": stride,
-            "sample_rate": self.sample_rate,
-            "num_steps_total": num_steps_total
+            "num_steps_total": num_steps_total,
+            "note_df": note_df
         }
 
     def __getitem__(self, idx):
@@ -144,14 +146,30 @@ class MAPSDataset(Dataset):
         frame_labels = data["frame_labels"]
         velocity = data["velocity"]
         num_steps_total = data["num_steps_total"]
+        note_df = data["note_df"]
 
         if self.max_steps is not None:
+            # Extract a random slice of length max_steps from the quantized labels
             step_start = self.random.randint(num_steps_total - self.max_steps)
             step_end = step_start + self.max_steps
-
             audio = audio[step_start:step_end]
             frame_labels = frame_labels[step_start:step_end]
             velocity = velocity[step_start:step_end]
+
+            # Slice the original continous labels as well
+            scale_factor = self.hop_length / self.sample_rate
+            time_start = step_start * scale_factor
+            time_end = step_end * scale_factor
+            note_df = note_df[note_df["onset"].between(time_start, time_end) |
+                              note_df["offset"].between(time_start, time_end)]
+            intervals = (note_df[["onset", "offset"]] - time_start).clip(0, time_end - time_start)
+        else:
+            intervals = note_df[["onset", "offset"]]
+
+        p_ref = np.array([midi_to_hz(p) for p in note_df["pitch"]])
+        i_ref = intervals.to_numpy()
+        v_ref = note_df["velocity"].to_numpy()
+        midi_labels = (p_ref, i_ref, v_ref)
 
         onsets = (frame_labels == 3).float()
         offsets = (frame_labels == 1).float()
@@ -164,6 +182,7 @@ class MAPSDataset(Dataset):
             "offsets": offsets,
             "frames": frames,
             "velocity": velocity,
-            "sample_rate": data["sample_rate"],
-            "hop_length": data["hop_length"],
+            "midi_labels": midi_labels,
+            "sample_rate": self.sample_rate,
+            "hop_length": self.hop_length,
         }
