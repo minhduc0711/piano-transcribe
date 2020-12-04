@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 
 from .lstm import BiLSTM
-from src.eval import compute_note_metrics
+from src.eval import compute_note_metrics, compute_frame_metrics
 
 
 def velocity_loss(velocity_pred, velocity_true, onset_true):
@@ -162,20 +162,21 @@ class OnsetsAndFrames(pl.LightningModule):
         # COMPUTING TRANSCRIPTION METRICS
         # needs to iterate over single samples, as metric computation does not support batching
         sample_metrics = []  # each elem is a metric dict for 1 sample
-        for onset_est, frame_est, vel_est, midi_label \
-                in zip(onset_pred, frame_pred, velocity_pred, batch["midi_labels"]):
-            p_est, i_est, v_est = self.extract_notes(
-                onset_est,
-                frame_est,
-                vel_est,
+        for i in range(len(onset_pred)):
+            p_est, i_est, v_est, final_frame_pred = self.extract_notes(
+                onset_pred[i],
+                frame_pred[i],
+                velocity_pred[i],
                 sample_rate=sample_rate,
                 hop_length=hop_length
             )
-            p_ref, i_ref, v_ref = midi_label
+            p_ref, i_ref, v_ref = batch["midi_labels"][i]
 
-            sample_metrics.append(
-                compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref)
-            )
+            sample_metrics.append({
+                **compute_frame_metrics(final_frame_pred,
+                                        frame_true[i].squeeze().cpu().numpy()),
+                **compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref)
+            })
         # average metrics over samples,
         # noting that all metric dicts have the same structure
         for metric_type in sample_metrics[0].keys():
@@ -200,12 +201,19 @@ class OnsetsAndFrames(pl.LightningModule):
         Make sure that a note is produced only when both an onset & one or more frames agree.
         Works on single sample only.
 
-        Args:
-            onsets, frames, velocity: tensor of shape (time, num_pitches)
-        Returns:
-            pitches: ndarray of shape (num_notes,)
-            intervals: ndarray of shape (num_notes, 2)
-            velocities: ndarray of shape (num_notes,)
+        Args
+        ----
+        onsets, frames, velocity: tensor of shape (time, num_pitches)
+        Returns
+        -------
+        pitches : array of shape (num_notes,)
+            pitch of detected notes
+        intervals : array of shape (num_notes, 2)
+            onset & offset of detected notes
+        velocities : array of shape (num_notes,)
+            predicted velocities of detected notes
+        final_frame_pred : array of shape (time, num_pitches)
+            the final frame predictions after matching onsets & frames
         """
         # threshold the probabilities
         onsets = (onsets > onset_threshold).cpu().to(torch.int)
@@ -234,6 +242,10 @@ class OnsetsAndFrames(pl.LightningModule):
                 intervals.append([onset, offset])
                 velocities.append(velocity[onset, pitch].item())
 
+        final_frame_pred = np.zeros_like(onsets)
+        for pitch, (onset, offset) in zip(pitches, intervals):
+            final_frame_pred[onset:offset, pitch] = 1
+
         pitches = np.array([midi_to_hz(p + 21) for p in pitches])
         if len(intervals) > 0:
             scale_factor = hop_length / sample_rate
@@ -242,4 +254,4 @@ class OnsetsAndFrames(pl.LightningModule):
             intervals = np.empty((0, 2))
         velocities = np.array(velocities)
 
-        return pitches, intervals, velocities
+        return pitches, intervals, velocities, final_frame_pred
