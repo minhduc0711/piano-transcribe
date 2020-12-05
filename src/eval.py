@@ -49,6 +49,18 @@ def compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref):
 
 
 def compute_frame_metrics(frame_pred, frame_true):
+    """
+    Computes frame-level classification metrics
+
+    Parameters
+    ----------
+    frame_pred, frame_true: arrays of shape (time, num_pitches)
+
+    Returns
+    -------
+    dict
+        contains frame-level precision, recall and f1 score
+    """
     p = precision_score(frame_true.T, frame_pred.T, average="micro")
     r = recall_score(frame_true.T, frame_pred.T, average="micro")
     f1 = (2 * p * r) / (p + r)
