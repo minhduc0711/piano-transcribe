@@ -4,6 +4,7 @@ from mir_eval.transcription import precision_recall_f1_overlap as eval_notes
 from mir_eval.transcription_velocity import (
     precision_recall_f1_overlap as eval_notes_with_velocity,
 )
+from sklearn.metrics import precision_score, recall_score
 
 
 def compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref):
@@ -45,3 +46,27 @@ def compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref):
     metrics["note_with_offsets_and_velocity"]["overlap"] = o
 
     return metrics
+
+
+def compute_frame_metrics(frame_pred, frame_true):
+    """
+    Computes frame-level classification metrics
+
+    Parameters
+    ----------
+    frame_pred, frame_true: arrays of shape (time, num_pitches)
+
+    Returns
+    -------
+    dict
+        contains frame-level precision, recall and f1 score
+    """
+    p = precision_score(frame_true.T, frame_pred.T, average="micro")
+    r = recall_score(frame_true.T, frame_pred.T, average="micro")
+    f1 = (2 * p * r) / (p + r)
+
+    return {"frame": {
+        "precision": p,
+        "recall": r,
+        "f1": f1
+    }}

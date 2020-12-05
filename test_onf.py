@@ -7,7 +7,7 @@ from tqdm import tqdm
 import numpy as np
 from src.data.audio import onf_transform
 from src.data.data_modules import MAPSDataModule
-from src.eval import compute_note_metrics
+from src.eval import compute_note_metrics, compute_frame_metrics
 from src.models.onsets_and_frames import OnsetsAndFrames
 
 
@@ -23,7 +23,7 @@ dm = MAPSDataModule(batch_size=1,
                     audio_transform=onf_transform,
                     hop_length=512,
                     lazy_loading=True,
-                    debug=False)
+                    debug=True)
 dm.setup(stage="test")
 
 model = OnsetsAndFrames.load_from_checkpoint(args.checkpoint,
@@ -46,7 +46,7 @@ for batch in tqdm(dm.test_dataloader(), "Test samples"):
     with torch.no_grad():
         onset_pred, frame_pred, velocity_pred = model(audio_feats)
 
-    p_est, i_est, v_est = model.extract_notes(
+    p_est, i_est, v_est, final_frame_pred = model.extract_notes(
         onset_pred.squeeze(),
         frame_pred.squeeze(),
         velocity_pred.squeeze(),
@@ -55,22 +55,23 @@ for batch in tqdm(dm.test_dataloader(), "Test samples"):
     )
     p_ref, i_ref, v_ref = batch["midi_labels"][0]
 
-    sample_metrics.append(
-        compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref)
-    )
+    sample_metrics.append({
+        **compute_frame_metrics(final_frame_pred,
+                                frame_true.squeeze().cpu().numpy()),
+        **compute_note_metrics(i_est, p_est, v_est, i_ref, p_ref, v_ref)
+    })
 
 # average metrics over samples,
 # noting that all metric dicts have the same structure
-avg_metrics = defaultdict(dict)
+final_metrics = defaultdict(lambda: defaultdict(lambda: "N/A"))
 for metric_type in sample_metrics[0].keys():
     for cls_metric in sample_metrics[0][metric_type]:
-        avg_metrics[metric_type][cls_metric] = np.mean([
-            metric[metric_type][cls_metric] for metric in sample_metrics
-        ])
+        vals = [metric[metric_type][cls_metric] for metric in sample_metrics]
+        final_metrics[metric_type][cls_metric] = f"{np.mean(vals):.4f} \u00B1 {np.std(vals):.4f}"
 
 table = []
-for metric_type in sorted(avg_metrics.keys()):
-    d = avg_metrics[metric_type]
+for metric_type in sorted(final_metrics.keys()):
+    d = final_metrics[metric_type]
     table.append([
         metric_type,
         d["precision"],
