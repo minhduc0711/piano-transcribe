@@ -9,6 +9,7 @@ from src.models.onsets_and_frames import OnsetsAndFrames
 
 parser = ArgumentParser()
 parser.add_argument("--batch-size", type=int, default=8)
+parser.add_argument("--debug", action="store_true")
 parser = Trainer.add_argparse_args(parser)
 args = parser.parse_args()
 
@@ -20,7 +21,7 @@ dm = MAPSDataModule(batch_size=args.batch_size,
                     max_steps=max_steps,
                     audio_transform=onf_transform,
                     hop_length=512,
-                    debug=True)
+                    debug=args.debug)
 dm.setup(stage="fit")
 
 model = OnsetsAndFrames(in_feats=229,

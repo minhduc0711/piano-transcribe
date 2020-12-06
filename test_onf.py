@@ -13,6 +13,8 @@ from src.models.onsets_and_frames import OnsetsAndFrames
 
 parser = ArgumentParser()
 parser.add_argument("--checkpoint", type=str, required=True)
+parser.add_argument("--debug", action="store_true")
+
 args = parser.parse_args()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -23,7 +25,7 @@ dm = MAPSDataModule(batch_size=1,
                     audio_transform=onf_transform,
                     hop_length=512,
                     lazy_loading=True,
-                    debug=True)
+                    debug=args.debug)
 dm.setup(stage="test")
 
 model = OnsetsAndFrames.load_from_checkpoint(args.checkpoint,

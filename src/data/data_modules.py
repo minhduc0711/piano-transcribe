@@ -19,14 +19,17 @@ class MAPSDataModule(pl.LightningDataModule):
     RAW_DATA_DIR = "data/raw/MAPS/"
     PROCESSED_DATA_DIR = "data/processed/MAPS_MUS/"
 
-    def __init__(self, batch_size: int,
-                 sample_rate: int,
-                 max_steps: int,
-                 audio_transform=None,
-                 hop_length=1,
-                 num_workers=4,
-                 lazy_loading=False,
-                 debug=False):
+    def __init__(
+        self,
+        batch_size: int,
+        sample_rate: int,
+        max_steps: int,
+        audio_transform=None,
+        hop_length=1,
+        num_workers=4,
+        lazy_loading=False,
+        debug=False,
+    ):
         super(MAPSDataModule, self).__init__()
         self.batch_size = batch_size
         self.sample_rate = sample_rate
@@ -100,7 +103,7 @@ class MAPSDataModule(pl.LightningDataModule):
                 audio_transform=self.audio_transform,
                 hop_length=self.hop_length,
                 lazy_loading=self.lazy_loading,
-                debug=self.debug
+                debug=self.debug,
             )
             self.val_ds = MAPSDataset(
                 self.PROCESSED_DATA_DIR,
@@ -110,7 +113,7 @@ class MAPSDataModule(pl.LightningDataModule):
                 audio_transform=self.audio_transform,
                 hop_length=self.hop_length,
                 lazy_loading=self.lazy_loading,
-                debug=self.debug
+                debug=self.debug,
             )
             self.dims = tuple(self.train_ds[0]["audio"].shape)
 
@@ -118,30 +121,36 @@ class MAPSDataModule(pl.LightningDataModule):
             self.test_ds = MAPSDataset(
                 self.PROCESSED_DATA_DIR,
                 subsets=test_subsets,
-                max_steps=self.max_steps,
+                max_steps=None,
                 sample_rate=self.sample_rate,
                 audio_transform=self.audio_transform,
                 hop_length=self.hop_length,
                 lazy_loading=self.lazy_loading,
-                debug=self.debug
+                debug=self.debug,
             )
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers,
-            collate_fn=self.collate_fn
+            self.train_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            collate_fn=self.collate_fn,
         )
 
     def val_dataloader(self):
         return DataLoader(
-            self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers,
-            collate_fn=self.collate_fn
+            self.val_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            collate_fn=self.collate_fn,
         )
 
     def test_dataloader(self):
         return DataLoader(
-            self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers,
-            collate_fn=self.collate_fn
+            self.test_ds,
+            batch_size=1,
+            num_workers=self.num_workers,
+            collate_fn=self.collate_fn,
         )
 
     def collate_fn(self, item_dicts):
@@ -151,3 +160,8 @@ class MAPSDataModule(pl.LightningDataModule):
             if isinstance(batch[k][0], torch.Tensor):
                 batch[k] = torch.stack(batch[k], 0)
         return batch
+
+    def set_max_steps(self, new_value):
+        self.max_steps = new_value
+        self.train_ds.max_steps = new_value
+        self.val_ds.max_steps = new_value
