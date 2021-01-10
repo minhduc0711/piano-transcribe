@@ -78,8 +78,10 @@ dm.setup()
 
 table = []
 for max_steps in [1, 5]:
-    for clf in [SGDClassifier(loss="log"),
-                SGDClassifier(loss="hinge")]:
+    for clf in [
+        SGDClassifier(loss="log"),
+        SGDClassifier(loss="hinge")
+    ]:
         if clf.loss == "log":
             clf_name = "log_reg"
         elif clf.loss == "hinge":
@@ -88,7 +90,7 @@ for max_steps in [1, 5]:
 
         clf_wrapper = MultiOutputClassifier(clf)
         metrics = train_and_eval_model(clf_wrapper, dm, max_steps,
-                                       num_iters=100)
+                                       num_iters=1000)
         frame_metrics = metrics["frame"]
         table.append([
             f"{clf_name} (max_steps={max_steps})",
