@@ -25,7 +25,9 @@ class ConvStack(nn.Module):
     def __init__(self, in_feats: int, out_feats: int):
         """
         Convolutional acoustic model, takes as input a tensor of shape
-            (batch, channel, time, feature_dim)
+            (batch, channel, time, in_feats)
+        and outputs a tensor of shape
+            (batch, time, out_feats)
         Args:
             in_feats: feature dim of input
             out_feats: feature dim of output
@@ -40,13 +42,12 @@ class ConvStack(nn.Module):
             nn.Conv2d(out_feats // 16, out_feats // 16, (3, 3), padding=1),
             nn.BatchNorm2d(out_feats // 16),
             nn.ReLU(),
-            # layer 2
             nn.MaxPool2d((1, 2)),
             nn.Dropout(0.25),
+            # layer 2
             nn.Conv2d(out_feats // 16, out_feats // 8, (3, 3), padding=1),
             nn.BatchNorm2d(out_feats // 8),
             nn.ReLU(),
-            # layer 3
             nn.MaxPool2d((1, 2)),
             nn.Dropout(0.25),
         )
