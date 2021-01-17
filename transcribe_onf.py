@@ -27,7 +27,7 @@ print("Loading model...")
 model = OnsetsAndFrames.load_from_checkpoint(args.checkpoint, in_feats=229)
 print("Performing forward pass...")
 onset_pred, frame_pred, velocity_pred = model(audio)
-p_est, i_est, v_est = model.extract_notes(
+p_est, i_est, v_est, _ = model.extract_notes(
     onset_pred.squeeze(),
     frame_pred.squeeze(),
     velocity_pred.squeeze(),
@@ -64,7 +64,7 @@ for event in events:
     )
     last_tick = current_tick
 
-output_dir = Path("out/")
+output_dir = Path("demo/")
 output_dir.mkdir(exist_ok=True)
 out_midi_path = output_dir / Path(args.audio).with_suffix(".midi").name
 file.save(out_midi_path)
