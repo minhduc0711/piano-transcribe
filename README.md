@@ -3,6 +3,8 @@ piano-transcribe
 
 Final project for MALIS course at EURECOM.
 
+Reference implementation for the Onsets and Frames model: https://github.com/jongwook/onsets-and-frames/
+
 A few collaboration guidelines
 ------------
 * Put the untouched original dataset in `data/raw`, processed dataset in `data/processed`.
